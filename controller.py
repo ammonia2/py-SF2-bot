@@ -1,273 +1,174 @@
 import socket
 import json
-import csv
-import datetime
-import os
 import sys
-import keyboard  # You can install this via pip: pip install keyboard
+import keyboard  # External package: pip install keyboard
+import pandas as pd
 from game_state import GameState
 from bot import Bot
 from command import Command
 
-def connect(port):
-    # For making a connection with the game
-    print(f"Attempting to connect on port {port}...")
-    try:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind(("127.0.0.1", port))
-        print(f"Socket bound to port {port}, waiting for game to connect...")
-        server_socket.listen(5)
-        print("Listening for connections...")
-        (client_socket, address) = server_socket.accept()
-        print(f"Connected to game at {address}!")
-        return client_socket
-    except Exception as e:
-        print(f"Connection error: {e}")
-        raise
+# Global data collector for frame information
+frameData = []
 
-def send(client_socket, command):
-    # This function will send your updated command to Bizhawk so that game reacts according to your command
-    command_dict = command.object_to_dict()
-    pay_load = json.dumps(command_dict).encode()
-    client_socket.sendall(pay_load)
+# Character names mapped to their IDs (0-11)
+CHARACTER_NAMES = {
+    0: "Ryu",
+    1: "Ken",
+    2: "ChunLi",
+    3: "Guile",
+    4: "Cammy",
+    5: "Sagat",
+    6: "Dhalsim",
+    7: "Zangief",
+    8: "Honda",
+    9: "Blanka",
+    10: "Vega",
+    11: "Bison"
+}
 
-def receive(client_socket):
-    # Receive the game state and return both the game state object and original dict
-    try:
-        pay_load = client_socket.recv(4096)
-        input_dict = json.loads(pay_load.decode())
-        game_state = GameState(input_dict)
-        return game_state, input_dict
-    except Exception as e:
-        print(f"Error receiving data: {e}")
-        return None, None
-
-def get_manual_command():
-    # Handle manual input for player
-    command = Command()
+def logGameData(gameState, frameNum):
+    """Log current game state to our data collector"""
+    global frameData
     
+    frameData.append({
+        "frame": frameNum,
+
+        # Player 1
+        "p1Id": gameState.player1.player_id,
+        "p1Health": gameState.player1.health,
+        "p1PosX": gameState.player1.x_coord,
+        "p1PosY": gameState.player1.y_coord,
+        "p1Jump": gameState.player1.is_jumping,
+        "p1Crouch": gameState.player1.is_crouching,
+        "p1InMove": gameState.player1.is_player_in_move,
+        "p1MoveId": gameState.player1.move_id,
+
+        # Player 1 buttons
+        "p1Up": gameState.player1.player_buttons.up,
+        "p1Down": gameState.player1.player_buttons.down,
+        "p1Left": gameState.player1.player_buttons.left,
+        "p1Right": gameState.player1.player_buttons.right,
+        "p1Select": gameState.player1.player_buttons.select,
+        "p1Start": gameState.player1.player_buttons.start,
+        "p1Y": gameState.player1.player_buttons.Y,
+        "p1B": gameState.player1.player_buttons.B,
+        "p1X": gameState.player1.player_buttons.X,
+        "p1A": gameState.player1.player_buttons.A,
+        "p1L": gameState.player1.player_buttons.L,
+        "p1R": gameState.player1.player_buttons.R,
+
+        # Player 2
+        "p2Id": gameState.player2.player_id,
+        "p2Health": gameState.player2.health,
+        "p2PosX": gameState.player2.x_coord,
+        "p2PosY": gameState.player2.y_coord,
+        "p2Jump": gameState.player2.is_jumping,
+        "p2Crouch": gameState.player2.is_crouching,
+        "p2InMove": gameState.player2.is_player_in_move,
+        "p2MoveId": gameState.player2.move_id,
+
+        # Player 2 buttons
+        "p2Up": gameState.player2.player_buttons.up,
+        "p2Down": gameState.player2.player_buttons.down,
+        "p2Left": gameState.player2.player_buttons.left,
+        "p2Right": gameState.player2.player_buttons.right,
+        "p2Select": gameState.player2.player_buttons.select,
+        "p2Start": gameState.player2.player_buttons.start,
+        "p2Y": gameState.player2.player_buttons.Y,
+        "p2B": gameState.player2.player_buttons.B,
+        "p2X": gameState.player2.player_buttons.X,
+        "p2A": gameState.player2.player_buttons.A,
+        "p2L": gameState.player2.player_buttons.L,
+        "p2R": gameState.player2.player_buttons.R,
+
+        # Round info
+        "timer": gameState.timer,
+        "roundStarted": gameState.has_round_started,
+        "roundOver": gameState.is_round_over,
+        "fightResult": gameState.fight_result
+    })
+
+def saveGameData(gameState=None):
+    """Save collected frame data to CSV file using character name"""
+    global frameData
+    
+    # Generate filename based on player 1's character ID
+    if gameState and gameState.player1 and gameState.player1.player_id in CHARACTER_NAMES:
+        characterName = CHARACTER_NAMES[gameState.player1.player_id]
+        filename = f"{characterName}.csv"
+    else:
+        # Fallback to argument or default name
+        filename = sys.argv[1] if len(sys.argv) > 1 else "gameData.csv"
+    
+    df = pd.DataFrame(frameData)
+    outputPath = "training_data/" + filename
+    df.to_csv(outputPath, index=False)
+    print(f"Game data saved to {outputPath}")
+
+def connectToGame(port):
+    """Establish connection with the game client"""
+    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serverSocket.bind(("127.0.0.1", port))
+    serverSocket.listen(5)
+    (clientSocket, _) = serverSocket.accept()
+    print("Connected to game!")
+    return clientSocket
+
+def sendCommand(clientSocket, command):
+    """Send controller command to the game"""
+    commandDict = command.object_to_dict()
+    payload = json.dumps(commandDict).encode()
+    clientSocket.sendall(payload)
+
+def receiveGameState(clientSocket):
+    """Receive and parse current game state"""
+    payload = clientSocket.recv(4096)
+    inputDict = json.loads(payload.decode())
+    gameState = GameState(inputDict)
+    return gameState
+
+def getPlayerInput():
+    """Get manual keyboard input for player controls"""
+    command = Command()
+    # Map keyboard keys to game controls
     command.player_buttons.up = keyboard.is_pressed('w')
     command.player_buttons.down = keyboard.is_pressed('s')
     command.player_buttons.left = keyboard.is_pressed('a')
     command.player_buttons.right = keyboard.is_pressed('d')
-    command.player_buttons.A = keyboard.is_pressed('j')  # A button
-    command.player_buttons.B = keyboard.is_pressed('k')  # B button
-    command.player_buttons.X = keyboard.is_pressed('l')  # X button
-    command.player_buttons.Y = keyboard.is_pressed('i')  # Y button
-
+    command.player_buttons.A = keyboard.is_pressed('j')
+    command.player_buttons.B = keyboard.is_pressed('k')
+    command.player_buttons.X = keyboard.is_pressed('u')
+    command.player_buttons.Y = keyboard.is_pressed('i')
+    command.player_buttons.L = keyboard.is_pressed('n')
+    command.player_buttons.R = keyboard.is_pressed('m')
     return command
 
-def get_character_name(game_state, player_idx):
-    """Get the character name based on character ID"""
-    player = getattr(game_state, player_idx)
-    character_id = player.character
-    
-    # Map of character IDs to names - update this with the actual mapping from your game
-    character_names = {
-        0: "Ryu",
-        1: "Ken",
-        2: "ChunLi",
-        3: "Guile",
-        4: "Zangief",
-        # Add other character mappings as needed
-    }
-    
-    return character_names.get(character_id, f"Character{character_id}")
-
-def save_data_to_csv(data_rows, filename):
-    # Check if file exists to determine if we need to write headers
-    file_exists = os.path.isfile(filename)
-    
-    with open(filename, 'a', newline='') as csvfile:
-        if data_rows and len(data_rows) > 0:
-            fieldnames = list(data_rows[0].keys())
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
-            if not file_exists:
-                writer.writeheader()
-                
-            writer.writerows(data_rows)
-
+currentState = None
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python main.py [player_number] [control_mode]")
-        print("player_number: 1 or 2 to control Player 1 or 2")
-        print("control_mode: 'manual' or 'bot' or 'record_manual' or 'record_bot' to specify the control method")
-        sys.exit(1)
+    # Connect and initialize
+    clientSocket = connectToGame(9999)
+    
+    frameCounter = 0
+    
+    # Main game loop
+    while True:
+        # Get current game state
+        currentState = receiveGameState(clientSocket)
         
-    player_num = sys.argv[1]
-    control_mode = sys.argv[2]
-    
-    if player_num not in ['1', '2']:
-        raise ValueError("Invalid player number. Please provide '1' or '2' to control Player 1 or 2.")
-
-    if control_mode not in ['manual', 'bot', 'record_manual', 'record_bot']:
-        raise ValueError("Invalid control mode. Please specify 'manual', 'bot', 'record_manual', or 'record_bot'.")
-
-    # Determine if we're recording
-    is_recording = control_mode.startswith('record_')
-    # Determine if we're using manual or bot control
-    is_manual = control_mode == 'manual' or control_mode == 'record_manual'
-    
-    # Connect to the appropriate port based on player number
-    port = 9999 if player_num == '1' else 10000
-    client_socket = connect(port)
-    
-    # Set player indices based on player number
-    player_idx = "player1" if player_num == '1' else "player2"
-    opponent_idx = "player2" if player_num == '1' else "player1"
-    
-    bot = Bot()
-    frame_counter = 0
-    
-    # Initialize variables for data recording
-    data_buffer = []
-    buffer_size = 100  # Save every 100 frames to reduce disk I/O
-    
-    if is_recording:
-        # Get character name
-        game_state, _ = receive(client_socket)
-        if game_state:
-            character_name = get_character_name(game_state, player_idx)
-        else:
-            character_name = "Unknown"
+        # Log data if round is active
+        if currentState.is_round_over == False:    
+            logGameData(currentState, frameCounter)
         
-        # Determine control type for filename
-        control_type = "manual" if is_manual else "bot"
+        # Process player input and send to game
+        playerCommand = getPlayerInput()
+        sendCommand(clientSocket, playerCommand)
         
-        # Generate timestamp for unique filename
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Create CSV filename
-        csv_filename = f"training_data/{character_name}.csv"
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(csv_filename), exist_ok=True)
-        print(f"Recording data to {csv_filename}")
-    
-    control_description = "manual" if is_manual else "bot"
-    if is_recording:
-        control_description += " with recording"
-    
-    print(f"Starting {control_description} control...")
-    print("Press Ctrl+C to exit")
-    
-    try:
-        while True:
-            try:
-                # Receive game state
-                game_state, raw_input_dict = receive(client_socket)
-                
-                # Handle connection issues or end of round
-                if game_state is None:
-                    print("Lost connection or received invalid data. Attempting to reconnect...")
-                    break
-                
-                frame_counter += 1
-                
-                # Skip processing if round is over, but continue to receive data
-                if game_state.is_round_over:
-                    print("Round over! Waiting for next round...")
-                    # Just send a neutral command to keep the connection alive
-                    neutral_command = Command()
-                    send(client_socket, neutral_command)
-                    continue
-                
-                # Generate command based on control mode
-                if is_manual:
-                    command = get_manual_command()
-                else:  # bot control
-                    command = bot.fight(game_state, player_num)
-                
-                # Send the command
-                send(client_socket, command)
-                
-                # Record data if in record mode
-                if is_recording:
-                    # Extract player and opponent data
-                    player = getattr(game_state, player_idx)
-                    opponent = getattr(game_state, opponent_idx)
-                    
-                    # Extract player data properly
-                    player_fields = {}
-                    for k, v in player.__dict__.items():
-                        if k == "buttons":
-                            # Extract button values directly instead of the object reference
-                            for button_name, button_value in vars(v).items():
-                                player_fields[f"player_button_{button_name}"] = 1 if button_value else 0
-                        else:
-                            player_fields[f"player_{k}"] = v
-                    
-                    # Extract opponent data properly
-                    opponent_fields = {}
-                    for k, v in opponent.__dict__.items():
-                        if k == "buttons":
-                            # Extract button values directly instead of the object reference
-                            for button_name, button_value in vars(v).items():
-                                opponent_fields[f"opponent_button_{button_name}"] = 1 if button_value else 0
-                        else:
-                            opponent_fields[f"opponent_{k}"] = v
-                    
-                    game_fields = {k: v for k, v in game_state.__dict__.items() 
-                                  if k not in [player_idx, opponent_idx]}
-                    
-                    # Input button fields from command
-                    button_fields = {
-                        'input_up': int(command.player_buttons.up),
-                        'input_down': int(command.player_buttons.down),
-                        'input_left': int(command.player_buttons.left),
-                        'input_right': int(command.player_buttons.right),
-                        'input_A': int(command.player_buttons.A),
-                        'input_B': int(command.player_buttons.B),
-                        'input_X': int(command.player_buttons.X),
-                        'input_Y': int(command.player_buttons.Y)
-                    }
-                    
-                    # Combine all data
-                    row_data = {}
-                    row_data.update(player_fields)
-                    row_data.update(opponent_fields)
-                    row_data.update(game_fields)
-                    row_data.update(button_fields)
-                    row_data['timestamp'] = datetime.datetime.now().timestamp()
-                    row_data['frame_number'] = frame_counter
-                    
-                    # Add to buffer
-                    data_buffer.append(row_data)
-                    
-                    # Write to CSV periodically
-                    if len(data_buffer) >= buffer_size:
-                        save_data_to_csv(data_buffer, csv_filename)
-                        data_buffer = []
-                        print(f"Recorded {frame_counter} frames so far")
-                
-                # Print status every 100 frames
-                if frame_counter % 100 == 0:
-                    print(f"Frame {frame_counter} - Player health: {getattr(game_state, player_idx).health}, " 
-                          f"Opponent health: {getattr(game_state, opponent_idx).health}")
-                    
-            except socket.error as e:
-                print(f"Socket error: {e}")
-                break
-            except json.JSONDecodeError as e:
-                print(f"JSON decode error: {e}")
-                continue
-            except Exception as e:
-                print(f"Unexpected error: {e}")
-                continue
-                
-    except KeyboardInterrupt:
-        print("\nExiting program...")
-    finally:
-        # Save any remaining data in buffer
-        if is_recording and data_buffer and csv_filename:
-            save_data_to_csv(data_buffer, csv_filename)
-            print(f"Final data saved to {csv_filename}")
-        
-        try:
-            client_socket.close()
-            print("Connection closed.")
-        except:
-            pass
+        # Increment frame counter
+        frameCounter += 1
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        # Save data when exiting - pass the last game state if available
+        saveGameData(currentState)
