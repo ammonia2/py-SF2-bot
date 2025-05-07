@@ -1,6 +1,7 @@
 import socket
 import json
 import sys
+import os
 import keyboard  # External package: pip install keyboard
 import pandas as pd
 from game_state import GameState
@@ -102,7 +103,9 @@ def saveGameData(gameState=None):
     
     df = pd.DataFrame(frameData)
     outputPath = "training_data/" + filename
-    df.to_csv(outputPath, index=False)
+    
+    # Append to the CSV file instead of overwriting
+    df.to_csv(outputPath, index=False, mode='a', header=not os.path.exists(outputPath))
     print(f"Game data saved to {outputPath}")
 
 def connectToGame(port):
