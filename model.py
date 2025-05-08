@@ -85,7 +85,7 @@ class Model:
         history = self.model.fit(
             self.XTrain, self.yTrain,
             validation_data = (self.XTest, self.yTest),
-            epochs=6,
+            epochs=30,
             batch_size = 64,
             shuffle = True,
             verbose=1
@@ -102,33 +102,74 @@ class Model:
 def concatenateData():
     """Merge all character data in a single DataFrame & filter required cols"""
     data = pd.DataFrame()
-    dataDirectory = 'training_data/'
+    dataDirectory = 'training_data_processed/'
+
+    # Define the expected dtypes for each column
+    dtype_dict = {
+        "frame": int,
+        "p1Id": int,
+        "p1Health": int,
+        "p1PosX": int,
+        "p1PosY": int,
+        "p1Jump": int,
+        "p1Crouch": int,
+        "p1InMove": int,
+        "p1MoveId": int,
+        "p1Up": int,
+        "p1Down": int,
+        "p1Left": int,
+        "p1Right": int,
+        "p1Select": int,
+        "p1Start": int,
+        "p1Y": int,
+        "p1B": int,
+        "p1X": int,
+        "p1A": int,
+        "p1L": int,
+        "p1R": int,
+        "p2Id": int,
+        "p2Health": int,
+        "p2PosX": int,
+        "p2PosY": int,
+        "p2Jump": int,
+        "p2Crouch": int,
+        "p2InMove": int,
+        "p2MoveId": int,
+        "p2Up": int,
+        "p2Down": int,
+        "p2Left": int,
+        "p2Right": int,
+        "p2Select": int,
+        "p2Start": int,
+        "p2Y": int,
+        "p2B": int,
+        "p2X": int,
+        "p2A": int,
+        "p2L": int,
+        "p2R": int,
+        "timer": int,
+        "roundStarted": int,
+        "roundOver": int,
+        "fightResult": str
+    }
+
+    column_names = [
+        "frame", "p1Id", "p1Health", "p1PosX", "p1PosY", "p1Jump", "p1Crouch", "p1InMove", "p1MoveId",
+        "p1Up", "p1Down", "p1Left", "p1Right", "p1Select", "p1Start", "p1Y", "p1B", "p1X", "p1A", "p1L", "p1R",
+        "p2Id", "p2Health", "p2PosX", "p2PosY", "p2Jump", "p2Crouch", "p2InMove", "p2MoveId",
+        "p2Up", "p2Down", "p2Left", "p2Right", "p2Select", "p2Start", "p2Y", "p2B", "p2X", "p2A", "p2L", "p2R",
+        "timer", "roundStarted", "roundOver", "fightResult"
+    ]
 
     for filename in os.listdir(dataDirectory):
-        # print(filename)
         filepath = os.path.join(dataDirectory, filename)
-        df = pd.read_csv(filepath, low_memory= False)
+        df = pd.read_csv(filepath, low_memory=False, dtype=dtype_dict, skiprows=1, names=column_names)
         data = pd.concat([data, df], ignore_index=True)
 
     data = data[data['roundStarted'] != False]
 
     # dropping cuz not needed
     data = data.drop(['frame', 'roundStarted', 'fightResult', 'roundOver'], axis=1)
-
-    numericCols = ['p1PosX', 'p1PosY', 'p1Health', 'p1X', 'p1Y',
-        'p2PosX', 'p2PosY', 'p2Health', 'p2X', 'p2Y',
-        'timer']
-    boolCols = ['p1Jump', 'p1Crouch', 'p1InMove', 'p1Up', 'p1Down', 'p1Left', 'p1Right', 
-                'p1B', 'p1A', 'p1L', 'p1R', 'p2Jump', 'p2Crouch', 'p2InMove', 'p2Up', 
-                'p2Down', 'p2Left', 'p2Right', 'p2B', 'p2A', 'p2L', 'p2R']
-    
-    for col in numericCols:
-        if col in data.columns:
-            data[col] = pd.to_numeric(data[col], errors='coerce')
-    for col in boolCols:
-        if col in data.columns:
-            data[col] = pd.to_numeric(data[col], errors='coerce')
-
 
     data['xDist'] = data['p1PosX'] - data['p2PosX']
     data['yDist'] = data['p1PosY'] - data['p2PosY']

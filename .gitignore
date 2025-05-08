@@ -3,6 +3,7 @@ test.py
 test2.py
 sample.py
 pre_data.csv
+output.xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
