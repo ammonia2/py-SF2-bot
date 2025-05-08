@@ -1,3 +1,9 @@
+# specific files to ignore
+test.py
+test2.py
+sample.py
+pre_data.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
