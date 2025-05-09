@@ -17,6 +17,7 @@ import pandas as pd
 import numpy as np
 import os
 
+import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
@@ -98,7 +99,7 @@ class Model:
 def concatenateData():
     """Merge all character data in a single DataFrame & filter required cols"""
     data = pd.DataFrame()
-    dataDirectory = 'training_data_processed/'
+    dataDirectory = 'training_data_p2/'
 
     # Defining expected dtypes for each column
     dtype_dict = {
@@ -180,7 +181,10 @@ def normaliseFeatures(data):
     scaler = StandardScaler()
     featuresToNormalise = ['p1Health', 'p2Health', 'timer', 'xDist', 'yDist']
     data[featuresToNormalise] = scaler.fit_transform(data[featuresToNormalise])
-    # print(data.sample(5))
+
+    # saving the scaler for later use
+    joblib.dump(scaler, 'scaler.joblib')
+
     return data
 
 def oneHotEncoding(data):
@@ -196,7 +200,7 @@ def oneHotEncoding(data):
     # now p1Id and p2Id no longer useful
     data = data.drop(columns=['p1Id', 'p2Id', 'p1MoveId', 'p2MoveId', 'p1Select', 'p2Select', 'p1Start', 'p2Start'], axis=1)
     # print(data.columns.to_list())
-    data.sample(50).to_csv('pre_data.csv', index=False)
+    # data.sample(50).to_csv('pre_data.csv', index=False)
 
     return data
 
@@ -210,9 +214,11 @@ if __name__ == '__main__':
         'p1A', 'p1L', 'p1R'
     ]
     temp_df = data.drop(columns=targetColumns, axis=1)
+    featureNames = temp_df.columns.to_list()
+    joblib.dump(featureNames, 'feature_names.joblib')
     model = Model(
         layers=3,
-        neurons=32,
+        neurons=64,
         inputDimension=len(temp_df.columns.to_list()),  # total features after preprocessing
         outputDimension=len(targetColumns), # number of actions to predict
         trainingData=data,

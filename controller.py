@@ -146,32 +146,18 @@ def getPlayerInput():
     command.player_buttons.R = keyboard.is_pressed('m')
     return command
 
-currentState = None
 def main():
+    current_game_state = None
     # Connect and initialize
     clientSocket = connectToGame(9999)
     
-    frameCounter = 0
-    
-    # Main game loop
-    while True:
-        # Get current game state
-        currentState = receiveGameState(clientSocket)
-        
-        # Log data if round is active
-        if currentState.is_round_over == False:    
-            logGameData(currentState, frameCounter)
-        
-        # Process player input and send to game
-        playerCommand = getPlayerInput()
-        sendCommand(clientSocket, playerCommand)
-        
-        # Increment frame counter
-        frameCounter += 1
+    bot=Bot()
+    while (current_game_state is None) or (not current_game_state.is_round_over):
+
+        current_game_state = receiveGameState(clientSocket)
+        bot_command = bot.fight(current_game_state, '1')
+
+        sendCommand(clientSocket, bot_command)
 
 if __name__ == '__main__':
-    try:
-        main()
-    finally:
-        # Save data when exiting - pass the last game state if available
-        saveGameData(currentState)
+    main()
