@@ -25,7 +25,7 @@ class Bot:
         self.featureNames = joblib.load(featureNamesPath)
         print("Model and preprocessing tools loaded successfully.")
 
-        self.buttonThreshold = 0.00005 # Threshold to convert probabilities to binary button presses
+        self.buttonThreshold = 0.0005 # Threshold to convert probabilities to binary button presses
 
     def preprocessGameState(self, rawGameState):
         """Preprocesses the raw game state dictionary into the model's input format."""
