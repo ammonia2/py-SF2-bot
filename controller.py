@@ -5,7 +5,7 @@ import os
 import keyboard  # External package: pip install keyboard
 import pandas as pd
 from game_state import GameState
-from bot import Bot
+from bot2 import Bot
 from command import Command
 
 # Global data collector for frame information
