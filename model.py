@@ -26,7 +26,7 @@ from tensorflow.keras.layers import Dense, Flatten
 from tensorflow.keras.optimizers import Adam
 
 class Model:
-    def __init__(self, layers, neurons, inputDimension, outputDimension, trainingData):
+    def __init__(self, layers, neurons, inputDimension, outputDimension, trainingData, targetCols):
         # model
         self.hiddenLayers = layers
         self.neurons = neurons
@@ -44,11 +44,7 @@ class Model:
         self.XTest = None
         self.yTest = None
         
-        self.targetColumns = [
-            'p1Up', 'p1Down', 'p1Left', 'p1Right',
-            'p1Jump', 'p1Crouch', 'p1Y', 'p1B', 'p1X', 
-            'p1A', 'p1L', 'p1R'
-        ]
+        self.targetColumns = targetCols
         self.initialiseModel() # iniitialise Model
         
     def initialiseModel(self):
@@ -104,7 +100,7 @@ def concatenateData():
     data = pd.DataFrame()
     dataDirectory = 'training_data_processed/'
 
-    # Define the expected dtypes for each column
+    # Defining expected dtypes for each column
     dtype_dict = {
         "frame": int,
         "p1Id": int,
@@ -210,8 +206,7 @@ if __name__ == '__main__':
     data = oneHotEncoding(data)
     
     targetColumns = [
-        'p1Up', 'p1Down', 'p1Left', 'p1Right',
-        'p1Jump', 'p1Crouch', 'p1Y', 'p1B', 'p1X', 
+        'p1Up', 'p1Down', 'p1Left', 'p1Right', 'p1Y', 'p1B', 'p1X', 
         'p1A', 'p1L', 'p1R'
     ]
     temp_df = data.drop(columns=targetColumns, axis=1)
@@ -219,8 +214,9 @@ if __name__ == '__main__':
         layers=3,
         neurons=32,
         inputDimension=len(temp_df.columns.to_list()),  # total features after preprocessing
-        outputDimension=12, # number of actions to predict
-        trainingData=data
+        outputDimension=len(targetColumns), # number of actions to predict
+        trainingData=data,
+        targetCols= targetColumns
     )
    
     history = model.train()
