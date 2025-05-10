@@ -231,13 +231,10 @@ def concatenateData():
     action_keys = ['p1Up', 'p1Down', 'p1Left', 'p1Right', 'p1Y', 'p1B', 'p1X', 'p1A', 'p1L', 'p1R']
     data = data[data[action_keys].sum(axis=1) > 0]
 
-<<<<<<< HEAD
     # Remove 50% of rows where p1Left is True and other p1 input keys are False except p1Jump and p1Up
     condition = (data['p1Left'] == 1) & (data[['p1Down', 'p1Right', 'p1Y', 'p1B', 'p1X', 'p1A', 'p1L', 'p1R']].sum(axis=1) == 0)
     rows_to_remove = data[condition].sample(frac=0.8, random_state=42).index
     data = data.drop(index=rows_to_remove)
-=======
->>>>>>> 3e267cdea0462b7c08f268d79853e7fa9ad32caf
 
     data = data.dropna(axis=1, how='all')
     # dropping cuz not needed
