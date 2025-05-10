@@ -20,11 +20,11 @@ import os
 import joblib
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras import layers
+from tensorflow.keras.layers import Dense, Flatten
+from tensorflow.keras.optimizers import Adam
 
 class Model:
     def __init__(self, layers, neurons, inputDimension, outputDimension, trainingData, targetCols):
@@ -46,117 +46,102 @@ class Model:
         self.yTest = None
         
         self.targetColumns = targetCols
-        self.initialiseModel() # iniitialise Model
+        self.initialiseModel()
         
     def initialiseModel(self):
-        """initialise Multi Layer Perceptron model"""
+        """initialise Multi Layer Perceptron model with improvements"""
         
-        self.model = nn.Sequential()
-        self.model.add_module('input', nn.Linear(self.inputDim, self.neurons))
-        self.model.add_module('relu1', nn.ReLU())
+        self.model = Sequential()
+        
+        # Input layer with batch normalization
+        self.model.add(Dense(self.neurons, input_dim=self.inputDim))
+        self.model.add(layers.BatchNormalization())
+        self.model.add(layers.Activation('relu'))
+        self.model.add(layers.Dropout(0.2))
 
+        # Hidden layers with decreasing neurons
+        neurons = self.neurons
         for i in range(self.hiddenLayers - 1):
-            self.model.add_module(f'hidden{i+1}', nn.Linear(self.neurons, self.neurons))
-            self.model.add_module(f'relu{i+2}', nn.ReLU())
+            neurons = neurons // 2
+            self.model.add(Dense(neurons, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+            self.model.add(layers.BatchNormalization())
+            self.model.add(layers.Activation('relu'))
+            self.model.add(layers.Dropout(0.2))
         
-        self.model.add_module('output', nn.Linear(self.neurons, self.outputDim))
-        self.model.add_module('sigmoid', nn.Sigmoid())
+        # Output layer
+        self.model.add(Dense(self.outputDim, activation='sigmoid'))
+
+        # Learning rate scheduler
+        initial_learning_rate = 0.001
+        decay_steps = 1000
+        decay_rate = 0.9
+        lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate, decay_steps, decay_rate
+        )
+
+        self.model.compile(
+            optimizer=Adam(learning_rate=lr_schedule),
+            loss='binary_crossentropy',
+            metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
+        )
 
     def train(self):
-        """training after filtering the dataset"""
+        """training with k-fold cross validation and early stopping"""
         
         self.initialiseModel()
 
-        # transforming data before
         X = self.dataset.drop(columns=self.targetColumns)
         y = self.dataset[self.targetColumns]
 
         self.XTrain, self.XTest, self.yTrain, self.yTest = train_test_split(
             X, y, test_size=0.2, random_state=42, shuffle=True
         )
-        
-        # Convert to PyTorch tensors - ensuring all data is numeric
-        X_train_tensor = torch.FloatTensor(self.XTrain.astype(float).values)
-        y_train_tensor = torch.FloatTensor(self.yTrain.astype(float).values)
-        X_test_tensor = torch.FloatTensor(self.XTest.astype(float).values)
-        y_test_tensor = torch.FloatTensor(self.yTest.astype(float).values)
-        
-        # Create DataLoader
-        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-        
-        # Define optimizer and loss function
-        optimizer = optim.Adam(self.model.parameters(), lr=0.001)
-        criterion = nn.BCELoss()
-        
-        # Training loop
-        epochs = 30
-        history = {'loss': [], 'val_loss': [], 'accuracy': [], 'val_accuracy': []}
-        
-        for epoch in range(epochs):
-            self.model.train()
-            running_loss = 0.0
-            correct = 0
-            total = 0
-            
-            for inputs, targets in train_loader:
-                optimizer.zero_grad()
-                outputs = self.model(inputs)
-                loss = criterion(outputs, targets)
-                loss.backward()
-                optimizer.step()
-                
-                running_loss += loss.item()
-                predicted = (outputs > 0.5).float()
-                total += targets.size(0) * targets.size(1)
-                correct += (predicted == targets).sum().item()
-            
-            # Calculate validation metrics
-            self.model.eval()
-            with torch.no_grad():
-                val_outputs = self.model(X_test_tensor)
-                val_loss = criterion(val_outputs, y_test_tensor).item()
-                val_predicted = (val_outputs > 0.5).float()
-                val_total = y_test_tensor.size(0) * y_test_tensor.size(1)
-                val_correct = (val_predicted == y_test_tensor).sum().item()
-            
-            # Record metrics
-            epoch_loss = running_loss / len(train_loader)
-            epoch_acc = correct / total
-            val_acc = val_correct / val_total
-            
-            history['loss'].append(epoch_loss)
-            history['accuracy'].append(epoch_acc)
-            history['val_loss'].append(val_loss)
-            history['val_accuracy'].append(val_acc)
-            
-            print(f'Epoch {epoch+1}/{epochs}, Loss: {epoch_loss:.4f}, Acc: {epoch_acc:.4f}, Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
+
+        # Callbacks
+        early_stopping = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=5,
+            restore_best_weights=True
+        )
+
+        # Model checkpoint to save best model
+        checkpoint = tf.keras.callbacks.ModelCheckpoint(
+            'best_model.keras',
+            monitor='val_loss',
+            save_best_only=True
+        )
+
+        history = self.model.fit(
+            self.XTrain, self.yTrain,
+            validation_data=(self.XTest, self.yTest),
+            epochs=50,  # Increased epochs since we have early stopping
+            batch_size=32,  # Reduced batch size for better generalization
+            shuffle=True,
+            verbose=1,
+            callbacks=[early_stopping, checkpoint]
+        )
         
         return history
 
-    def predict(self):
-        self.model.eval()
-        with torch.no_grad():
-            X_test_tensor = torch.FloatTensor(self.XTest.values)
-            predictions = self.model(X_test_tensor).numpy()
-        return predictions
+    def predict(self, X):
+        """Make predictions with probability threshold"""
+        predictions = self.model.predict(X)
+        return (predictions > 0.5).astype(int)  # Convert probabilities to binary
 
     def evaluate(self):
-        self.model.eval()
-        with torch.no_grad():
-            X_test_tensor = torch.FloatTensor(self.XTest.values)
-            y_test_tensor = torch.FloatTensor(self.yTest.values)
-            
-            outputs = self.model(X_test_tensor)
-            criterion = nn.BCELoss()
-            loss = criterion(outputs, y_test_tensor).item()
-            
-            predicted = (outputs > 0.5).float()
-            total = y_test_tensor.size(0) * y_test_tensor.size(1)
-            correct = (predicted == y_test_tensor).sum().item()
-            accuracy = correct / total
+        """Comprehensive model evaluation"""
+        loss, accuracy, precision, recall = self.model.evaluate(self.XTest, self.yTest, verbose=0)
+        f1_score = 2 * (precision * recall) / (precision + recall + 1e-7)
         
-        return [loss, accuracy]
+        evaluation_metrics = {
+            'loss': loss,
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1_score
+        }
+        
+        return evaluation_metrics
 
 def concatenateData():
     """Merge all character data in a single DataFrame & filter required cols"""
@@ -227,19 +212,6 @@ def concatenateData():
 
     data = data[data['roundStarted'] != False]
 
-    # Filter out frames where all player 1 movement and attack keys are 0
-    action_keys = ['p1Up', 'p1Down', 'p1Left', 'p1Right', 'p1Y', 'p1B', 'p1X', 'p1A', 'p1L', 'p1R']
-    data = data[data[action_keys].sum(axis=1) > 0]
-
-<<<<<<< HEAD
-    # Remove 50% of rows where p1Left is True and other p1 input keys are False except p1Jump and p1Up
-    condition = (data['p1Left'] == 1) & (data[['p1Down', 'p1Right', 'p1Y', 'p1B', 'p1X', 'p1A', 'p1L', 'p1R']].sum(axis=1) == 0)
-    rows_to_remove = data[condition].sample(frac=0.8, random_state=42).index
-    data = data.drop(index=rows_to_remove)
-=======
->>>>>>> 3e267cdea0462b7c08f268d79853e7fa9ad32caf
-
-    data = data.dropna(axis=1, how='all')
     # dropping cuz not needed
     data = data.drop(['frame', 'roundStarted', 'fightResult', 'roundOver'], axis=1)
 
@@ -274,6 +246,8 @@ def oneHotEncoding(data):
     
     # now p1Id and p2Id no longer useful
     data = data.drop(columns=['p1Id', 'p2Id', 'p1MoveId', 'p2MoveId', 'p1Select', 'p2Select', 'p1Start', 'p2Start'], axis=1)
+    # print(data.columns.to_list())
+    # data.sample(50).to_csv('pre_data.csv', index=False)
 
     return data
 
@@ -299,4 +273,4 @@ if __name__ == '__main__':
     )
    
     history = model.train()
-    torch.save(model.model.state_dict(), 'SF2_model.pth')
+    model.model.save('SF2_model.keras')
