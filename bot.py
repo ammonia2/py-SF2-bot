@@ -23,13 +23,13 @@ class Bot:
         # Load the model architecture first
         input_dim = len(joblib.load(featureNamesPath))
         self.model = torch.nn.Sequential()
-        self.model.add_module('input', torch.nn.Linear(input_dim, 64))
+        self.model.add_module('input', torch.nn.Linear(input_dim, 128))
         self.model.add_module('relu1', torch.nn.ReLU())
-        self.model.add_module('hidden1', torch.nn.Linear(64, 64))
+        self.model.add_module('hidden1', torch.nn.Linear(128, 128))
         self.model.add_module('relu2', torch.nn.ReLU())
-        self.model.add_module('hidden2', torch.nn.Linear(64, 64))
+        self.model.add_module('hidden2', torch.nn.Linear(128, 128))
         self.model.add_module('relu3', torch.nn.ReLU())
-        self.model.add_module('output', torch.nn.Linear(64, len(targetCols)))
+        self.model.add_module('output', torch.nn.Linear(128, len(targetCols)))
         self.model.add_module('sigmoid', torch.nn.Sigmoid())
         # Load the trained weights
         self.model.load_state_dict(torch.load(modelPath))
@@ -99,25 +99,18 @@ class Bot:
              "fightResult": rawGameState.fight_result
          }
 
-        # Convert to DataFrame
         stateDf = pd.DataFrame([stateDict])
 
-        # Applying the filtering
-        # stateDf = stateDf[stateDf['roundStarted'] != False]
-
-        # Calculate relative positions (Matching concatenateData)
         stateDf['xDist'] = stateDf['p1PosX'] - stateDf['p2PosX']
         stateDf['yDist'] = stateDf['p1PosY'] - stateDf['p2PosY']
         stateDf = stateDf.drop(columns=['p1PosX', 'p1PosY', 'p2PosX', 'p2PosY'], axis=1)
 
-        # Handle boolean-like columns conversion (Matching concatenateData logic)
-        # Need to list ALL bool-like columns that were converted during training
         boolLikeCols = [
             'p1Jump', 'p1Crouch', 'p1InMove', 'p1Up', 'p1Down', 'p1Left', 'p1Right',
-            'p1B', 'p1A', 'p1L', 'p1R', 'p1Select', 'p1Start', # P1 buttons are targets
+            'p1B', 'p1A', 'p1L', 'p1R', 'p1Select', 'p1Start',
             'p2Jump', 'p2Crouch', 'p2InMove', 'p2Up', 'p2Down', 'p2Left', 'p2Right',
-            'p2B', 'p2A', 'p2L', 'p2R', 'p2Select', 'p2Start', # P2 buttons are features
-            'roundStarted', 'roundOver' # These were dropped as features, but might be in initial data as bools
+            'p2B', 'p2A', 'p2L', 'p2R', 'p2Select', 'p2Start',
+            'roundStarted', 'roundOver'
         ]
         mapDict = { True: 1, False: 0, 'True': 1, 'False': 0, 'true': 1, 'false': 0,
                     '1': 1, '0': 0, 1: 1, 0: 0, 1.0: 1, 0.0: 0 }
@@ -140,11 +133,9 @@ class Bot:
                       'roundStarted', 'roundOver', 'p1Select', 'p1Start', 
                       'p2Select', 'p2Start']
 
-        # Only drop columns that actually exist in the current DataFrame row
         stateDf = stateDf.drop(columns=colsToDrop, axis=1)
 
         # Reindex the DataFrame row to match the exact order from self.featureNames
-        # This is CRITICAL
         XInputDf = stateDf.reindex(columns=self.featureNames, fill_value=0)
 
         XInput = XInputDf.values # convert DF to numpy array
@@ -156,7 +147,7 @@ class Bot:
     def fight(self, currentGameState, player):
         """Predicts and returns the command for the specified player using the trained model."""
 
-        myCommand = Command() # Create a new command object for this frame
+        myCommand = Command()
 
         if player == "1":
             if self.model is None:

@@ -233,7 +233,7 @@ def concatenateData():
 
     # Remove 50% of rows where p1Left is True and other p1 input keys are False except p1Jump and p1Up
     condition = (data['p1Left'] == 1) & (data[['p1Down', 'p1Right', 'p1Y', 'p1B', 'p1X', 'p1A', 'p1L', 'p1R']].sum(axis=1) == 0)
-    rows_to_remove = data[condition].sample(frac=0.8, random_state=42).index
+    rows_to_remove = data[condition].sample(frac=0.5, random_state=42).index
     data = data.drop(index=rows_to_remove)
 
     data = data.dropna(axis=1, how='all')
@@ -259,6 +259,11 @@ def normaliseFeatures(data):
 
     return data
 
+# p1Id: 0 -> 11
+# p1Id_is_0: 1 -> 0
+# p1Id_is_1: 0 -> 1
+# p1Id_is_2: 0 -> 0
+# p1Id_is_3: 0 -> 0
 def oneHotEncoding(data):
     """one hot encode p1Id and p2Id"""
     data['p1Id'] = pd.to_numeric(data['p1Id'], errors='coerce')
@@ -288,7 +293,7 @@ if __name__ == '__main__':
     joblib.dump(featureNames, 'feature_names.joblib')
     model = Model(
         layers=3,
-        neurons=64,
+        neurons=128,
         inputDimension=len(temp_df.columns.to_list()),  # total features after preprocessing
         outputDimension=len(targetColumns), # number of actions to predict
         trainingData=data,
