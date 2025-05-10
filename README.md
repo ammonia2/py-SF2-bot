@@ -18,6 +18,12 @@
 .
 ├── training_data_p2/       # CSV logs of recorded gameplay
 ├── model.py                # Main training script & model class
+├── bot.py                # Main training script & model class
+├── buttons.py              # Button mapping and input handling
+├── command.py              # Special move command processing
+├── controller.py           # Interface with emulator controls
+├── gamestate.py            # Game state parsing and management
+├── player.py               # Player entity representation
 ├── SF2_model.pth           # Trained model weights
 ├── scaler.joblib           # StandardScaler for feature normalization
 ├── feature_names.joblib    # Preserved feature list for inference
