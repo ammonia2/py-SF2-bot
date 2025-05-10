@@ -1,13 +1,13 @@
 from command import Command
 import numpy as np
 from buttons import Buttons
-import tensorflow as tf
+import torch
 import joblib
 import os
 import pandas as pd
 import numpy as np
 
-modelPath = 'SF2_model.keras'
+modelPath = 'SF2_model.pth'
 scalerPath = 'scaler.joblib'
 featureNamesPath = 'feature_names.joblib'
 
@@ -20,12 +20,26 @@ characterIds = list(range(12))
 
 class Bot:
     def __init__(self):
-        self.trainedModel = tf.keras.models.load_model(modelPath)
+        # Load the model architecture first
+        input_dim = len(joblib.load(featureNamesPath))
+        self.model = torch.nn.Sequential()
+        self.model.add_module('input', torch.nn.Linear(input_dim, 64))
+        self.model.add_module('relu1', torch.nn.ReLU())
+        self.model.add_module('hidden1', torch.nn.Linear(64, 64))
+        self.model.add_module('relu2', torch.nn.ReLU())
+        self.model.add_module('hidden2', torch.nn.Linear(64, 64))
+        self.model.add_module('relu3', torch.nn.ReLU())
+        self.model.add_module('output', torch.nn.Linear(64, len(targetCols)))
+        self.model.add_module('sigmoid', torch.nn.Sigmoid())
+        # Load the trained weights
+        self.model.load_state_dict(torch.load(modelPath))
+        self.model.eval()  # Set to evaluation mode
+        
         self.scaler = joblib.load(scalerPath)
         self.featureNames = joblib.load(featureNamesPath)
         print("Model and preprocessing tools loaded successfully.")
 
-        self.buttonThreshold = 0.0005 # Threshold to convert probabilities to binary button presses
+        self.buttonThreshold = 0.005 # Threshold to convert probabilities to binary button presses
 
     def preprocessGameState(self, rawGameState):
         """Preprocesses the raw game state dictionary into the model's input format."""
@@ -145,7 +159,7 @@ class Bot:
         myCommand = Command() # Create a new command object for this frame
 
         if player == "1":
-            if self.trainedModel is None:
+            if self.model is None:
                  print("Model not loaded. Returning default command.")
                  myCommand.player_buttons = Buttons()
                  return myCommand
@@ -158,11 +172,13 @@ class Bot:
                  myCommand.player_buttons = Buttons()
                  return myCommand
 
-            # Get predictions from the model
-            # Since our batch size is 1, it's (1, len(TARGET_COLUMNS))
-            print(f'Input: {XInput}')
-            outputProbs = self.trainedModel.predict(XInput, verbose=0) # Get the single prediction row since predict returns a numpy array of shape (batch_size, output_dim)
-            print(f'Output: {outputProbs}')
+            # Get predictions from the model using PyTorch
+            # print(f'Input: {XInput}')
+            with torch.no_grad():  # Disable gradient calculation for inference
+                input_tensor = torch.FloatTensor(XInput)
+                outputProbs = self.model(input_tensor).numpy()
+            
+            # print(f'Output: {outputProbs}')
             outputProbs = outputProbs[0]
 
             # Converting probabilities to binary decisions using the threshold
